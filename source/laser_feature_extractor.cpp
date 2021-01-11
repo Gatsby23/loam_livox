@@ -39,9 +39,8 @@
 int main( int argc, char **argv )
 {
     ros::init( argc, argv, "scanRegistration" );
+    //!@brief 构造函数初始化中启动ROS节点
     Laser_feature laser_feature;
-
     ros::spin();
-
     return 0;
 }

@@ -6,14 +6,19 @@ common:
     if_save_to_pcd_files: 0
     if_update_mean_and_cov_incrementally: 1
     threshold_cell_revisit: 2000    # if update frame index bigger than this threshold, treat target cell as revisited
-
+//!@brief 注意到这里配置的设定
 feature_extraction:
+    // 确定这里是64线
     scan_line: 64
+    // 匹配的角点曲率设定
     mapping_line_resolution: 0.1
+    // 匹配的平面曲率设定
     mapping_plane_resolution: 0.4
     livox_min_sigma: 7e-4
     livox_min_dis: 0.1
+    // 角点曲率
     corner_curvature: 0.1
+    // 平面曲率
     surface_curvature: 0.005
     minimum_view_angle: 5
 

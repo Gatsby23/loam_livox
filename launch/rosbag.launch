@@ -10,10 +10,12 @@
     <param name="optimization/max_allow_incre_T" type="double" value="0.3"/>
     <param name="optimization/max_allow_final_cost" type="double" value="2.0"/>
 
+    //!@brief 通过/livox/lidar消息节点来读取信息
     <node pkg="loam_livox" type="livox_scanRegistration" name="livox_scanRegistration">
      <remap from="/laser_points_0" to="/livox/lidar" />
     </node>
 
+    //!@brief 通过livox_laserMapping来解算位姿
     <node pkg="loam_livox" type="livox_laserMapping" name="livox_laserMapping" output="screen" />
 
     <arg name="rviz" default="true" />

@@ -65,20 +65,29 @@ using namespace Common_tools;
 class Laser_feature
 {
   public:
+    // 设定扫描周期为0.1s
+    // 当积分时间为0.1s时，mid-40的效果与32线效果相近
+    // 当积分时间为0.5s时，mid-40的效果应当与64线产品相当->这里实际上的旋转周期设置的是0.5s，保证是64线的点云
     const double m_para_scanPeriod = 0.1;
 
     int m_if_pub_debug_feature = 1;
 
+    // 系统前20帧的数据不用
     const int   m_para_system_delay = 20;
     int         m_para_system_init_count = 0;
     bool        m_para_systemInited = false;
+    // 点云曲率，40000是一帧点云中点的最大数量
     float       m_pc_curvature[ 400000 ];
+    // 曲率点对应的序号
     int         m_pc_sort_idx[ 400000 ];
+    // 点是否筛选过的标志，0-未筛选，1-是啊选过
     int         m_pc_neighbor_picked[ 400000 ];
+    // 点的分类标号：2-曲率很大，1-曲率比较大，-1曲率很小，0曲率比较小
     int         m_pc_cloud_label[ 400000 ];
     int         m_if_motion_deblur = 0;
     int         m_odom_mode = 0; //0 = for odom, 1 = for mapping
     float       m_plane_resolution;
+    // 应该是点的分辨率
     float       m_line_resolution;
     int         m_piecewise_number;
 
@@ -86,7 +95,9 @@ class Laser_feature
     File_logger m_file_logger;
 
     bool        m_if_pub_each_line = false;
+    // 两种模式的激光雷达都可以选择，其中0表示是velodyne激光雷达，1表示的是livox固态激光雷达
     int         m_lidar_type = 0; // 0 is velodyne, 1 is livox
+    // 默认的是velodyne激光雷达，所以认为是64线
     int         m_laser_scan_number = 64;
     std::mutex  m_mutex_lock_handler;
     Livox_laser m_livox;
@@ -113,6 +124,7 @@ class Laser_feature
     std::vector< std::vector<pcl::PointCloud<pcl::PointXYZI> > >   m_map_pointcloud_corner_vec_vec;
     double m_minimum_range = 0.01;
 
+    // livox的发布信息，主要是发布角点信息，平面信息和整体点云全部信息
     ros::Publisher            m_pub_pc_livox_corners, m_pub_pc_livox_surface, m_pub_pc_livox_full;
     sensor_msgs::PointCloud2  temp_out_msg;
     pcl::VoxelGrid<PointType> m_voxel_filter_for_surface;
@@ -128,18 +140,25 @@ class Laser_feature
     }
 
 
-    int                       init_ros_env()
-    {
-
+    // !@brief ROS初始化函数
+    int init_ros_env(){
         ros::NodeHandle nh;
         m_init_timestamp = ros::Time::now();
+        // 这里才是订阅livox lidar消息的地方
         init_livox_lidar_para(nh);
+        // 设置当前激光雷达的线束，需要注意的是在配置文件中，decay实际上是0.5s，保证是64线的激光点云
         get_ros_parameter<int>(nh, "feature_extraction/scan_line", m_laser_scan_number, 16 );
+        // 设置Mapping过程中plane的分辨率为
         get_ros_parameter<float>( nh,"feature_extraction/mapping_plane_resolution", m_plane_resolution, 0.8 );
+        // 设置Mapping过程中点的分辨率
         get_ros_parameter<float>( nh,"feature_extraction/mapping_line_resolution", m_line_resolution, 0.8 );
+        // 最小范围？
         get_ros_parameter<double>(nh, "feature_extraction/minimum_range", m_minimum_range, 0.1 );
+        // 判断是否有运动模糊
         get_ros_parameter<int>( nh,"common/if_motion_deblur", m_if_motion_deblur, 1 );
+        
         get_ros_parameter<int>( nh,"common/piecewise_number", m_piecewise_number, 3 );
+        
         get_ros_parameter<int>(nh, "common/odom_mode", m_odom_mode, 0 );
 
         double livox_corners, livox_surface, minimum_view_angle;
@@ -163,7 +182,6 @@ class Laser_feature
             return 0;
         }
 
-
         m_file_logger.set_log_dir( log_save_dir_name );
         m_file_logger.init( "scanRegistration.log" );
         m_map_pointcloud_full_vec_vec.resize(m_maximum_input_lidar_pointcloud);
@@ -184,9 +202,11 @@ class Laser_feature
         m_pub_pc_surface_flat = nh.advertise<sensor_msgs::PointCloud2>( "/laser_cloud_flat", 10000 );
         m_pub_pc_surface_less_flat = nh.advertise<sensor_msgs::PointCloud2>( "/laser_cloud_less_flat", 10000 );
         m_pub_pc_removed_pt = nh.advertise<sensor_msgs::PointCloud2>( "/laser_remove_points", 10000 );
-
+        // 将点云中的角点信息发布出去
         m_pub_pc_livox_corners = nh.advertise<sensor_msgs::PointCloud2>( "/pc2_corners", 10000 );
+        // 将点云中的平面信息发布出去
         m_pub_pc_livox_surface = nh.advertise<sensor_msgs::PointCloud2>( "/pc2_surface", 10000 );
+        // 将点云中的全部点信息发布出去
         m_pub_pc_livox_full = nh.advertise<sensor_msgs::PointCloud2>( "/pc2_full", 10000 );
 
         m_voxel_filter_for_surface.setLeafSize( m_plane_resolution / 2, m_plane_resolution / 2, m_plane_resolution / 2 );
@@ -381,6 +401,7 @@ class Laser_feature
                     pcl::toROSMsg( *livox_corners, temp_out_msg );
                     temp_out_msg.header.stamp = current_time;
                     temp_out_msg.header.frame_id = "camera_init";
+                    // 将角点信息发布出去
                     m_pub_pc_livox_corners.publish( temp_out_msg );
                     if ( m_odom_mode == 0 ) // odometry mode
                     {
@@ -824,15 +845,17 @@ class Laser_feature
         }
     }
 
+    // 订阅livox lidar相关消息的地方
     void init_livox_lidar_para( ros::NodeHandle & nh )
     {
         ENABLE_SCREEN_PRINTF;
         string lidar_tpye_name;
         screen_out << "~~~~~ Init livox lidar parameters ~~~~~" << std::endl;
+        // 得到lidar_type的名字，判断是什么
         if(get_ros_parameter<std::string>( nh, "common/lidar_type", lidar_tpye_name , std::string( "" ) ).length() )
         {
             screen_printf( "***** I get lidar_type declaration, lidar_type_name = %s ***** \r\n", lidar_tpye_name.c_str() );
-
+            // 如果这里lidar_type_name是livox的话，将lidar类型置为1
             if ( lidar_tpye_name.compare( "livox" ) == 0 )
             {
                 m_lidar_type = 1;
@@ -851,11 +874,13 @@ class Laser_feature
             screen_out << "Set lidar type = velodyne" << std::endl;
         }
 
+        // livox lidar能探测到的最小距离是
         if ( get_ros_parameter<float>( nh, "feature_extraction/livox_min_dis", m_livox.m_livox_min_allow_dis , 0.1 ) )
         {
             screen_out << "Set livox lidar minimum distance= " << m_livox.m_livox_min_allow_dis << std::endl;
         }
 
+        // livox lidar能探测到的最小角度是
         if ( get_ros_parameter<float>( nh, "feature_extraction/livox_min_sigma", m_livox.m_livox_min_sigma, 7e-4 ) )
         {
             screen_out << "Set livox lidar minimum sigama =  " << m_livox.m_livox_min_sigma << std::endl;
